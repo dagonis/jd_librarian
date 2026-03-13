@@ -11,3 +11,6 @@ license = { text = "MIT" }
 
 [project.scripts]
 jd = "jd.__main__:main"
+
+[project.optional-dependencies]
+dev = ["pytest"]
