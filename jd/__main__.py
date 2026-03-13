@@ -1,9 +1,7 @@
-#! /opt/homebrew/bin/python3
-
 import argparse
 import os
 
-from core import JohnDecimal
+from .core import JohnDecimal
 
 def main() -> None:
     # Top level argument parser
