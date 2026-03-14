@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
+import re
 
 
 def _visible_dirs(path: Path) -> list[Path]:
@@ -11,6 +12,17 @@ def _visible_dirs(path: Path) -> list[Path]:
 def _visible_files(path: Path) -> list[Path]:
     """Return visible (non-hidden) files in path."""
     return [p for p in path.iterdir() if p.is_file() and not p.name.startswith(".")]
+
+
+@dataclass
+class LintWarning:
+    """A single lint finding from a JD library check."""
+    rule: str
+    message: str
+    path: Path
+
+    def __str__(self) -> str:
+        return f"[{self.rule}] {self.message}"
 
 
 @dataclass
@@ -86,6 +98,102 @@ class JohnDecimal:
 
     def __str__(self) -> str:
         return str(self.identifiers)
+
+    # -- Lint operations --
+
+    def lint(self) -> list[LintWarning]:
+        """Check the library for structural problems. Returns a list of warnings."""
+        warnings: list[LintWarning] = []
+        self._lint_bad_naming(warnings)
+        self._lint_duplicate_categories(warnings)
+        self._lint_category_out_of_range(warnings)
+        self._lint_duplicate_identifiers(warnings)
+        return warnings
+
+    @staticmethod
+    def lint_from_path(path: str) -> list[LintWarning]:
+        """Run all lint checks, starting with bad naming (which can prevent normal init)."""
+        warnings: list[LintWarning] = []
+        root = Path(path)
+        area_pattern = re.compile(r"^\d{2}-\d{2} .+$")
+        category_pattern = re.compile(r"^\d{2} .+$")
+        identifier_pattern = re.compile(r"^\d{2} .+$")
+
+        for d in _visible_dirs(root):
+            if not area_pattern.match(d.name):
+                warnings.append(LintWarning("bad_naming", f"Area folder doesn't match 'NN-NN Name' format: {d.name}", d))
+            else:
+                for cd in _visible_dirs(d):
+                    if not category_pattern.match(cd.name):
+                        warnings.append(LintWarning("bad_naming", f"Category folder doesn't match 'NN Name' format: {cd.name}", cd))
+                    else:
+                        for idd in _visible_dirs(cd):
+                            if not identifier_pattern.match(idd.name):
+                                warnings.append(LintWarning("bad_naming", f"Identifier folder doesn't match 'NN Name' format: {idd.name}", idd))
+
+        # If there are bad naming issues, the tree can't be fully parsed, so return early
+        if warnings:
+            return warnings
+
+        jd = JohnDecimal(path)
+        warnings.extend(jd.lint())
+        return warnings
+
+    def _lint_bad_naming(self, warnings: list[LintWarning]) -> None:
+        """Flag folders that don't follow the expected JD naming conventions.
+        Only checks folders that were successfully parsed (already well-formed)."""
+        pass  # Handled by lint_from_path before init
+
+    def _lint_duplicate_categories(self, warnings: list[LintWarning]) -> None:
+        """Flag areas that contain multiple categories with the same number."""
+        for area in self.areas:
+            seen: dict[str, Category] = {}
+            for category in area.categories:
+                if category.category_number in seen:
+                    warnings.append(LintWarning(
+                        "duplicate_category",
+                        f"Duplicate category number {category.category_number} in {area}: "
+                        f"'{seen[category.category_number].category_name}' and '{category.category_name}'",
+                        category.file_system_location,
+                    ))
+                else:
+                    seen[category.category_number] = category
+
+    def _lint_category_out_of_range(self, warnings: list[LintWarning]) -> None:
+        """Flag categories whose number falls outside the parent area's range."""
+        for area in self.areas:
+            try:
+                start, end = area.area_number_range.split("-")
+                range_start, range_end = int(start), int(end)
+            except ValueError:
+                continue
+            for category in area.categories:
+                try:
+                    cat_num = int(category.category_number)
+                except ValueError:
+                    continue
+                if not (range_start <= cat_num <= range_end):
+                    warnings.append(LintWarning(
+                        "category_out_of_range",
+                        f"Category {category.category_number} ({category.category_short_name}) "
+                        f"is outside area range {area.area_number_range}",
+                        category.file_system_location,
+                    ))
+
+    def _lint_duplicate_identifiers(self, warnings: list[LintWarning]) -> None:
+        """Flag categories that contain multiple identifiers with the same number."""
+        for category in self.categories:
+            seen: dict[str, Identifier] = {}
+            for identifier in category.identifiers:
+                if identifier.id_number in seen:
+                    warnings.append(LintWarning(
+                        "duplicate_id",
+                        f"Duplicate identifier {category.category_number}.{identifier.id_number} in {category}: "
+                        f"'{seen[identifier.id_number].short_name}' and '{identifier.short_name}'",
+                        identifier.file_system_location,
+                    ))
+                else:
+                    seen[identifier.id_number] = identifier
 
     # -- Create operations --
 

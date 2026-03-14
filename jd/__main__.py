@@ -11,7 +11,7 @@ def main() -> None:
                         default=os.getenv("JD_ROOT", "~/jd"))
     parser.add_argument("--dry_run", help="Don't actually do anything, just print what would happen", action="store_true")
     parser.add_argument("--stats", "-s", help="Print some stats about the Johnny Decimal library", action="store_true")
-    subparsers = parser.add_subparsers(help="Johnny Decimal command help")
+    subparsers = parser.add_subparsers(help="Johnny Decimal command help", dest="command")
     # Subparser for searching JD
     search_parser = subparsers.add_parser("search", help="Search Johnny Decimal")
     search_parser.add_argument("search_term", help="The search term to use")
@@ -29,8 +29,18 @@ def main() -> None:
     add_identifier_parser.add_argument("category_id", help="The category ID to add the identifier to")
     add_identifier_parser.add_argument("new_identifier_name", help="The name of the new identifier to add")
     add_identifier_parser.add_argument("--add_placeholder", "-p", help="Add a placeholder file for the new identifier. This is useful if you are using tools like Obsidian where you may want to link to this ID.", action="store_true")
+    # Subparser for linting the JD library
+    subparsers.add_parser("lint", help="Check the Johnny Decimal library for structural problems")
     # On to the rest of the script
     args = parser.parse_args()
+    if args.command == "lint":
+        warnings = JohnDecimal.lint_from_path(args.jd_root)
+        if warnings:
+            for w in warnings:
+                print(w)
+        else:
+            print("No issues found!")
+        return
     jd = JohnDecimal(args.jd_root)
     if hasattr(args, 'search_term'):
         print(jd.search_johnny_decimal(args.search_term, args.include_category, args.include_files))

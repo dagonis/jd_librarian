@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 
-from jd.core import JohnDecimal, Area, Category, Identifier, JohnnyDecimalFile
+from jd.core import JohnDecimal, Area, Category, Identifier, JohnnyDecimalFile, LintWarning
 
 
 # ---------------------------------------------------------------------------
@@ -319,3 +319,108 @@ class TestCLI:
         )
         assert result.returncode == 0
         assert "Would have created" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Tests: lint
+# ---------------------------------------------------------------------------
+
+class TestLint:
+    def test_clean_library_has_no_warnings(self, jd: JohnDecimal):
+        warnings = jd.lint()
+        assert warnings == []
+
+    def test_duplicate_category_number(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "11 Vendors").mkdir()
+        (area / "11 Also Vendors").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "duplicate_category" in rules
+
+    def test_duplicate_identifier_number(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        (cat / "01 Acme").mkdir()
+        (cat / "01 Also Acme").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "duplicate_id" in rules
+
+    def test_category_out_of_range(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "25 Wrong Place").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "category_out_of_range" in rules
+
+    def test_bad_area_naming(self, tmp_path: Path):
+        (tmp_path / "Management").mkdir()
+        warnings = JohnDecimal.lint_from_path(str(tmp_path))
+        rules = [w.rule for w in warnings]
+        assert "bad_naming" in rules
+
+    def test_bad_category_naming(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "Vendors").mkdir()
+        warnings = JohnDecimal.lint_from_path(str(tmp_path))
+        rules = [w.rule for w in warnings]
+        assert "bad_naming" in rules
+
+    def test_bad_identifier_naming(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        (cat / "Acme Corp").mkdir()
+        warnings = JohnDecimal.lint_from_path(str(tmp_path))
+        rules = [w.rule for w in warnings]
+        assert "bad_naming" in rules
+
+    def test_lint_warning_str(self):
+        w = LintWarning("duplicate_id", "test message", Path("/tmp"))
+        assert str(w) == "[duplicate_id] test message"
+
+    def test_multiple_issues(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "11 Vendors").mkdir()
+        (area / "11 Also Vendors").mkdir()
+        (area / "25 Out of Range").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = {w.rule for w in warnings}
+        assert "duplicate_category" in rules
+        assert "category_out_of_range" in rules
+
+
+class TestLintCLI:
+    def test_cli_lint_clean(self, jd_root: Path):
+        import subprocess
+        result = subprocess.run(
+            ["jd", "--jd_root", str(jd_root), "lint"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert "No issues found" in result.stdout
+
+    def test_cli_lint_with_issues(self, tmp_path: Path):
+        import subprocess
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "11 Vendors").mkdir()
+        (area / "11 Also Vendors").mkdir()
+        result = subprocess.run(
+            ["jd", "--jd_root", str(tmp_path), "lint"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert "duplicate_category" in result.stdout
