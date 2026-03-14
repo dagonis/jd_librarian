@@ -1,12 +1,15 @@
 import argparse
 import os
+import sys
 
+from . import __version__
 from .core import JohnDecimal
 from .report import generate_report
 
 def main() -> None:
     # Top level argument parser
     parser = argparse.ArgumentParser(description="JD Librarian - A command line tool for managing Johnny Decimal libraries!")
+    parser.add_argument("--version", "-V", action="version", version=f"jd-librarian {__version__}")
     parser.add_argument("--jd_root", 
                         help="The root of the Johnny Decimal library. This is can also be set with the environment variable JD_ROOT", 
                         default=os.getenv("JD_ROOT", "~/jd"))
@@ -46,6 +49,7 @@ def main() -> None:
     # On to the rest of the script
     args = parser.parse_args()
     if args.command == "lint":
+        _validate_jd_root(args.jd_root)
         warnings = JohnDecimal.lint_from_path(args.jd_root)
         if warnings:
             for w in warnings:
@@ -58,6 +62,8 @@ def main() -> None:
         for path in created:
             print(f"{'Would create' if args.dry_run else 'Created'}: {path}")
         return
+    if args.command != "scaffold":
+        _validate_jd_root(args.jd_root)
     if args.command == "stats":
         jd = JohnDecimal(args.jd_root)
         print(jd.stats_cli())
@@ -86,3 +92,16 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
+
+
+def _validate_jd_root(path: str) -> None:
+    """Exit with a helpful message if the JD root doesn't exist."""
+    from pathlib import Path
+    resolved = Path(path).expanduser()
+    if not resolved.exists():
+        print(f"Error: JD root does not exist: {resolved}", file=sys.stderr)
+        print("Set JD_ROOT or pass --jd_root to a valid directory.", file=sys.stderr)
+        sys.exit(1)
+    if not resolved.is_dir():
+        print(f"Error: JD root is not a directory: {resolved}", file=sys.stderr)
+        sys.exit(1)
