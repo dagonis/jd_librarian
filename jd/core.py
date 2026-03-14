@@ -76,7 +76,15 @@ def _parse_yaml_template(path: Path) -> list[tuple[str, list[str]]]:
     defined: dict[str, tuple[str, list[str]]] = {}
     for area_name, categories in data.items():
         label = str(area_name).split(" ", maxsplit=1)[0]
-        cats = [str(c) for c in categories] if categories else []
+        if categories is None or categories == []:
+            cats: list[str] = []
+        else:
+            if not isinstance(categories, (list, tuple)):
+                raise ValueError(
+                    f"Categories for area '{area_name}' must be a list or tuple, "
+                    f"got {type(categories).__name__}"
+                )
+            cats = [str(c) for c in categories]
         defined[label] = (str(area_name), cats)
 
     return _fill_missing_areas(defined)
