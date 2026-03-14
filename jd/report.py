@@ -6,7 +6,8 @@ import html
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .core import JohnDecimal, LintWarning
+from .core import JohnDecimal
+from .models import LintWarning
 
 
 def generate_report(jd: JohnDecimal, warnings: list[LintWarning], output_path: str) -> str:
