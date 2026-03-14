@@ -852,3 +852,148 @@ class TestScaffoldYAMLTemplate:
         )
         assert result.returncode == 0
         assert (target / "00-09 Admin" / "00 Index").exists()
+
+
+# ---------------------------------------------------------------------------
+# Stats tests
+# ---------------------------------------------------------------------------
+
+class TestStats:
+    def test_stats_returns_dict(self, jd: JohnDecimal):
+        s = jd.stats()
+        assert isinstance(s, dict)
+
+    def test_stats_has_required_keys(self, jd: JohnDecimal):
+        s = jd.stats()
+        for key in ("total_areas", "active_areas", "total_categories", "category_capacity",
+                     "total_identifiers", "identifier_capacity", "total_files",
+                     "busiest_area", "deepest_category", "areas", "categories"):
+            assert key in s
+
+    def test_stats_area_counts(self, jd: JohnDecimal):
+        s = jd.stats()
+        assert s["total_areas"] == 2
+        assert s["active_areas"] == 2
+        assert s["total_categories"] == 3
+
+    def test_stats_file_count(self, jd: JohnDecimal):
+        s = jd.stats()
+        assert s["total_files"] == 2  # contract.pdf and notes.md
+
+    def test_stats_per_area(self, jd: JohnDecimal):
+        s = jd.stats()
+        assert len(s["areas"]) == 2
+        area = s["areas"][0]  # 10-19 Management
+        assert area["categories"] == 2
+        assert "category_capacity" in area
+
+    def test_stats_per_category(self, jd: JohnDecimal):
+        s = jd.stats()
+        assert len(s["categories"]) == 3
+        for c in s["categories"]:
+            assert "identifier_capacity" in c
+            assert "files" in c
+
+    def test_stats_capacity_percentage(self, jd: JohnDecimal):
+        s = jd.stats()
+        # 3 categories out of 20 slots (2 areas * 10)
+        assert s["category_capacity"] == 15.0
+
+    def test_stats_cli_output(self, jd: JohnDecimal):
+        output = jd.stats_cli()
+        assert "JD Library Stats" in output
+        assert "Per Area" in output
+        assert "Per Category" in output
+        assert "%" in output
+
+    def test_stats_empty_library(self, tmp_path: Path):
+        area = tmp_path / "00-09 Unused"
+        area.mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        s = jd.stats()
+        assert s["total_categories"] == 0
+        assert s["total_identifiers"] == 0
+        assert s["identifier_capacity"] == 0
+
+
+class TestStatsCLI:
+    def test_cli_stats(self, jd_root: Path):
+        import subprocess
+        result = subprocess.run(
+            ["jd", "--jd_root", str(jd_root), "stats"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert "JD Library Stats" in result.stdout
+        assert "%" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Report tests
+# ---------------------------------------------------------------------------
+
+class TestReport:
+    def test_report_generates_html(self, jd: JohnDecimal, tmp_path: Path):
+        from jd.report import generate_report
+        out = tmp_path / "report.html"
+        result = generate_report(jd, [], str(out))
+        assert Path(result).exists()
+        content = Path(result).read_text()
+        assert "<!DOCTYPE html>" in content
+        assert "JD LIBRARIAN" in content
+
+    def test_report_contains_stats(self, jd: JohnDecimal, tmp_path: Path):
+        from jd.report import generate_report
+        out = tmp_path / "report.html"
+        generate_report(jd, [], str(out))
+        content = out.read_text()
+        assert "Area Breakdown" in content
+        assert "Category Breakdown" in content
+
+    def test_report_contains_lint(self, jd: JohnDecimal, tmp_path: Path):
+        from jd.report import generate_report
+        warnings = jd.lint()
+        out = tmp_path / "report.html"
+        generate_report(jd, warnings, str(out))
+        content = out.read_text()
+        assert "Linter Report" in content
+
+    def test_report_clean_lint(self, tmp_path: Path):
+        from jd.report import generate_report
+        area = tmp_path / "lib" / "00-09 Admin"
+        area.mkdir(parents=True)
+        cat = area / "00 Index"
+        cat.mkdir()
+        jd = JohnDecimal(str(tmp_path / "lib"))
+        out = tmp_path / "report.html"
+        generate_report(jd, [], str(out))
+        content = out.read_text()
+        assert "No issues found" in content
+
+    def test_report_has_github_link(self, jd: JohnDecimal, tmp_path: Path):
+        from jd.report import generate_report
+        out = tmp_path / "report.html"
+        generate_report(jd, [], str(out))
+        content = out.read_text()
+        assert "github.com/dagonis/jd_librarian" in content
+
+    def test_report_has_cyberpunk_styling(self, jd: JohnDecimal, tmp_path: Path):
+        from jd.report import generate_report
+        out = tmp_path / "report.html"
+        generate_report(jd, [], str(out))
+        content = out.read_text()
+        assert "Orbitron" in content
+        assert "var(--cyan)" in content
+
+
+class TestReportCLI:
+    def test_cli_report(self, jd_root: Path, tmp_path: Path):
+        import subprocess
+        out = tmp_path / "report.html"
+        result = subprocess.run(
+            ["jd", "--jd_root", str(jd_root), "report", "-o", str(out)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert out.exists()
+        assert "Report written to" in result.stdout
