@@ -111,6 +111,9 @@ class JohnDecimal:
         self._lint_empty_categories(warnings)
         self._lint_empty_identifiers(warnings)
         self._lint_id_gaps(warnings)
+        self._lint_category_capacity(warnings)
+        self._lint_area_capacity(warnings)
+        self._lint_orphan_files(warnings)
         return warnings
 
     @staticmethod
@@ -233,6 +236,55 @@ class JohnDecimal:
                     "id_gap",
                     f"Category {category} has gaps in identifier numbers: {', '.join(missing)}",
                     category.file_system_location,
+                ))
+
+    def _lint_category_capacity(self, warnings: list[LintWarning], threshold: int = 80) -> None:
+        """Warn when a category is approaching the 99 identifier limit."""
+        for category in self.categories:
+            count = len(category.identifiers)
+            if count >= threshold:
+                warnings.append(LintWarning(
+                    "category_capacity",
+                    f"Category {category} has {count}/99 identifiers",
+                    category.file_system_location,
+                ))
+
+    def _lint_area_capacity(self, warnings: list[LintWarning], threshold: int = 8) -> None:
+        """Warn when an area is approaching the 10 category limit."""
+        for area in self.areas:
+            count = len(area.categories)
+            if count >= threshold:
+                warnings.append(LintWarning(
+                    "area_capacity",
+                    f"Area {area} has {count}/10 categories",
+                    area.file_system_location,
+                ))
+
+    def _lint_orphan_files(self, warnings: list[LintWarning]) -> None:
+        """Flag files sitting at the wrong level (root, area, or category level)."""
+        root = Path(self.file_system_location)
+        # Files in the root
+        for f in _visible_files(root):
+            warnings.append(LintWarning(
+                "orphan_file",
+                f"File at root level: {f.name}",
+                f,
+            ))
+        # Files in area folders
+        for area in self.areas:
+            for f in _visible_files(area.file_system_location):
+                warnings.append(LintWarning(
+                    "orphan_file",
+                    f"File in area {area}: {f.name}",
+                    f,
+                ))
+        # Files in category folders
+        for category in self.categories:
+            for f in _visible_files(category.file_system_location):
+                warnings.append(LintWarning(
+                    "orphan_file",
+                    f"File in category {category} (should be inside an identifier): {f.name}",
+                    f,
                 ))
 
     # -- Create operations --

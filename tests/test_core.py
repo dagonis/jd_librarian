@@ -462,6 +462,87 @@ class TestLint:
         gap_warnings = [w for w in warnings if w.rule == "id_gap"]
         assert len(gap_warnings) == 0
 
+    def test_category_capacity_warning(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        # Create 80 identifiers to hit the threshold
+        for i in range(1, 81):
+            (cat / f"{str(i).zfill(2)} Vendor{i}").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "category_capacity" in rules
+
+    def test_category_capacity_no_warning_below_threshold(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        for i in range(1, 5):
+            (cat / f"{str(i).zfill(2)} Vendor{i}").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        cap_warnings = [w for w in warnings if w.rule == "category_capacity"]
+        assert len(cap_warnings) == 0
+
+    def test_area_capacity_warning(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        # Create 8 categories to hit the threshold
+        for i in range(10, 18):
+            (area / f"{i} Category{i}").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "area_capacity" in rules
+
+    def test_area_capacity_no_warning_below_threshold(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "11 Vendors").mkdir()
+        (area / "12 Intel").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        cap_warnings = [w for w in warnings if w.rule == "area_capacity"]
+        assert len(cap_warnings) == 0
+
+    def test_orphan_file_at_root(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (tmp_path / "stray_file.txt").touch()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        orphan_warnings = [w for w in warnings if w.rule == "orphan_file"]
+        assert any("stray_file.txt" in w.message for w in orphan_warnings)
+
+    def test_orphan_file_in_area(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "notes.txt").touch()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        orphan_warnings = [w for w in warnings if w.rule == "orphan_file"]
+        assert any("notes.txt" in w.message for w in orphan_warnings)
+
+    def test_orphan_file_in_category(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        (cat / "README.md").touch()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        orphan_warnings = [w for w in warnings if w.rule == "orphan_file"]
+        assert any("README.md" in w.message for w in orphan_warnings)
+        assert "should be inside an identifier" in orphan_warnings[0].message
+
+    def test_no_orphan_files_in_clean_library(self, jd: JohnDecimal):
+        warnings = jd.lint()
+        orphan_warnings = [w for w in warnings if w.rule == "orphan_file"]
+        assert len(orphan_warnings) == 0
+
 
 class TestLintCLI:
     def test_cli_lint_runs(self, jd_root: Path):
