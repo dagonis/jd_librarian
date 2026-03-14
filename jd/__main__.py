@@ -2,6 +2,7 @@ import argparse
 import os
 
 from .core import JohnDecimal
+from .report import generate_report
 
 def main() -> None:
     # Top level argument parser
@@ -37,6 +38,11 @@ def main() -> None:
     scaffold_parser.add_argument("--mode", choices=["blank", "opinionated", "template"], default="blank",
                                  help="Scaffold mode: blank (default), opinionated, or template")
     scaffold_parser.add_argument("--template", dest="template_path", help="Path to template file (required for template mode)")
+    # Subparser for stats
+    subparsers.add_parser("stats", help="Show usage statistics for the Johnny Decimal library")
+    # Subparser for HTML report
+    report_parser = subparsers.add_parser("report", help="Generate an HTML report of the library")
+    report_parser.add_argument("-o", "--output", default="jd_report.html", help="Output file path (default: jd_report.html)")
     # On to the rest of the script
     args = parser.parse_args()
     if args.command == "lint":
@@ -51,6 +57,16 @@ def main() -> None:
         created = JohnDecimal.scaffold(args.target, args.mode, args.template_path, args.dry_run)
         for path in created:
             print(f"{'Would create' if args.dry_run else 'Created'}: {path}")
+        return
+    if args.command == "stats":
+        jd = JohnDecimal(args.jd_root)
+        print(jd.stats_cli())
+        return
+    if args.command == "report":
+        jd = JohnDecimal(args.jd_root)
+        warnings = jd.lint()
+        out = generate_report(jd, warnings, args.output)
+        print(f"Report written to {out}")
         return
     jd = JohnDecimal(args.jd_root)
     if hasattr(args, 'search_term'):

@@ -111,6 +111,12 @@ def _visible_files(path: Path) -> list[Path]:
     return [p for p in path.iterdir() if p.is_file() and not p.name.startswith(".")]
 
 
+def _bar(percent: float, width: int = 20) -> str:
+    """Return a unicode bar chart segment for CLI display."""
+    filled = round(width * min(percent, 100) / 100)
+    return "█" * filled + "░" * (width - filled)
+
+
 @dataclass
 class LintWarning:
     """A single lint finding from a JD library check."""
@@ -195,6 +201,92 @@ class JohnDecimal:
 
     def __str__(self) -> str:
         return str(self.identifiers)
+
+    # -- Stats operations --
+
+    def stats(self) -> dict:
+        """Compute usage statistics for the library.
+
+        Returns a dict with overall, per-area, and per-category stats.
+        """
+        total_areas = len(self.areas)
+        active_areas = sum(1 for a in self.areas if a.categories)
+        total_categories = len(self.categories)
+        total_identifiers = len(self.identifiers)
+        total_files = len(self.files)
+
+        # Max slots: 10 categories per area, 99 identifiers per category
+        max_categories = total_areas * 10
+        max_identifiers = total_categories * 99 if total_categories else 0
+
+        area_stats = []
+        for area in self.areas:
+            cat_count = len(area.categories)
+            id_count = sum(len(c.identifiers) for c in area.categories)
+            file_count = sum(len(i.files) for c in area.categories for i in c.identifiers)
+            area_stats.append({
+                "name": str(area),
+                "categories": cat_count,
+                "category_capacity": round(cat_count / 10 * 100, 1),
+                "identifiers": id_count,
+                "files": file_count,
+            })
+
+        category_stats = []
+        for category in self.categories:
+            id_count = len(category.identifiers)
+            file_count = sum(len(i.files) for i in category.identifiers)
+            category_stats.append({
+                "name": str(category),
+                "area": category.area,
+                "identifiers": id_count,
+                "identifier_capacity": round(id_count / 99 * 100, 1),
+                "files": file_count,
+            })
+
+        # Deepest path (most nesting levels with content)
+        deepest_category = max(self.categories, key=lambda c: len(c.identifiers)).category_name if self.categories else "N/A"
+        busiest_area = max(self.areas, key=lambda a: sum(len(c.identifiers) for c in a.categories)).area_name if self.areas else "N/A"
+
+        return {
+            "total_areas": total_areas,
+            "active_areas": active_areas,
+            "total_categories": total_categories,
+            "category_capacity": round(total_categories / max_categories * 100, 1) if max_categories else 0,
+            "total_identifiers": total_identifiers,
+            "identifier_capacity": round(total_identifiers / max_identifiers * 100, 1) if max_identifiers else 0,
+            "total_files": total_files,
+            "busiest_area": busiest_area,
+            "deepest_category": deepest_category,
+            "areas": area_stats,
+            "categories": category_stats,
+        }
+
+    def stats_cli(self) -> str:
+        """Return a formatted CLI string of library statistics."""
+        s = self.stats()
+        lines = [
+            "═══ JD Library Stats ═══",
+            "",
+            f"  Areas:        {s['active_areas']}/{s['total_areas']} active",
+            f"  Categories:   {s['total_categories']}/{s['total_areas'] * 10} slots ({s['category_capacity']}%)",
+            f"  Identifiers:  {s['total_identifiers']}",
+            f"  Files:        {s['total_files']}",
+            "",
+            f"  Busiest area:     {s['busiest_area']}",
+            f"  Fullest category: {s['deepest_category']}",
+            "",
+            "── Per Area ──",
+        ]
+        for a in s["areas"]:
+            bar = _bar(a["category_capacity"])
+            lines.append(f"  {a['name']:<30} {bar} {a['category_capacity']:5.1f}%  ({a['categories']} cats, {a['identifiers']} ids, {a['files']} files)")
+        lines.append("")
+        lines.append("── Per Category ──")
+        for c in s["categories"]:
+            bar = _bar(c["identifier_capacity"])
+            lines.append(f"  {c['name']:<30} {bar} {c['identifier_capacity']:5.1f}%  ({c['identifiers']} ids, {c['files']} files)")
+        return "\n".join(lines)
 
     # -- Lint operations --
 
