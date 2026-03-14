@@ -108,6 +108,9 @@ class JohnDecimal:
         self._lint_duplicate_categories(warnings)
         self._lint_category_out_of_range(warnings)
         self._lint_duplicate_identifiers(warnings)
+        self._lint_empty_categories(warnings)
+        self._lint_empty_identifiers(warnings)
+        self._lint_id_gaps(warnings)
         return warnings
 
     @staticmethod
@@ -194,6 +197,43 @@ class JohnDecimal:
                     ))
                 else:
                     seen[identifier.id_number] = identifier
+
+    def _lint_empty_categories(self, warnings: list[LintWarning]) -> None:
+        """Flag categories that have no identifiers."""
+        for category in self.categories:
+            if not category.identifiers:
+                warnings.append(LintWarning(
+                    "empty_category",
+                    f"Category {category} has no identifiers",
+                    category.file_system_location,
+                ))
+
+    def _lint_empty_identifiers(self, warnings: list[LintWarning]) -> None:
+        """Flag identifiers that have no files inside."""
+        for identifier in self.identifiers:
+            if not identifier.files:
+                warnings.append(LintWarning(
+                    "empty_identifier",
+                    f"Identifier {identifier} has no files",
+                    identifier.file_system_location,
+                ))
+
+    def _lint_id_gaps(self, warnings: list[LintWarning]) -> None:
+        """Flag categories where identifier numbers have gaps."""
+        for category in self.categories:
+            if len(category.identifiers) < 2:
+                continue
+            numbers = sorted(int(i.id_number) for i in category.identifiers)
+            missing = []
+            for i in range(numbers[0], numbers[-1] + 1):
+                if i not in numbers:
+                    missing.append(str(i).zfill(2))
+            if missing:
+                warnings.append(LintWarning(
+                    "id_gap",
+                    f"Category {category} has gaps in identifier numbers: {', '.join(missing)}",
+                    category.file_system_location,
+                ))
 
     # -- Create operations --
 

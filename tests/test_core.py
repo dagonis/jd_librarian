@@ -326,9 +326,10 @@ class TestCLI:
 # ---------------------------------------------------------------------------
 
 class TestLint:
-    def test_clean_library_has_no_warnings(self, jd: JohnDecimal):
+    def test_clean_library_has_no_high_severity_warnings(self, jd: JohnDecimal):
         warnings = jd.lint()
-        assert warnings == []
+        high_severity = [w for w in warnings if w.rule in ("duplicate_category", "duplicate_id", "category_out_of_range", "bad_naming")]
+        assert high_severity == []
 
     def test_duplicate_category_number(self, tmp_path: Path):
         area = tmp_path / "10-19 Management"
@@ -401,16 +402,75 @@ class TestLint:
         assert "duplicate_category" in rules
         assert "category_out_of_range" in rules
 
+    def test_empty_category(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "11 Vendors").mkdir()  # no identifiers inside
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "empty_category" in rules
+
+    def test_empty_category_not_flagged_when_has_ids(self, jd: JohnDecimal):
+        warnings = jd.lint()
+        # The fixture's "12 Intelligence" is empty, so it should be flagged
+        empty_cats = [w for w in warnings if w.rule == "empty_category"]
+        cat_names = [w.message for w in empty_cats]
+        assert any("Intelligence" in m for m in cat_names)
+        # But "11 Vendors" should NOT be flagged
+        assert not any("Vendors" in m for m in cat_names)
+
+    def test_empty_identifier(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        (cat / "01 Acme").mkdir()  # no files inside
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "empty_identifier" in rules
+
+    def test_empty_identifier_not_flagged_when_has_files(self, jd: JohnDecimal):
+        warnings = jd.lint()
+        empty_ids = [w for w in warnings if w.rule == "empty_identifier"]
+        # Acme Corp has files, so it should NOT be flagged
+        assert not any("Acme Corp" in w.message for w in empty_ids)
+
+    def test_id_gaps(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        (cat / "01 Acme").mkdir()
+        (cat / "03 Globex").mkdir()  # gap at 02
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        gap_warnings = [w for w in warnings if w.rule == "id_gap"]
+        assert len(gap_warnings) == 1
+        assert "02" in gap_warnings[0].message
+
+    def test_no_id_gaps_when_contiguous(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        (cat / "01 Acme").mkdir()
+        (cat / "02 Globex").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        gap_warnings = [w for w in warnings if w.rule == "id_gap"]
+        assert len(gap_warnings) == 0
+
 
 class TestLintCLI:
-    def test_cli_lint_clean(self, jd_root: Path):
+    def test_cli_lint_runs(self, jd_root: Path):
         import subprocess
         result = subprocess.run(
             ["jd", "--jd_root", str(jd_root), "lint"],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
-        assert "No issues found" in result.stdout
 
     def test_cli_lint_with_issues(self, tmp_path: Path):
         import subprocess
