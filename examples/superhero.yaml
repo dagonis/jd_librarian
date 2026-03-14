@@ -1,0 +1,39 @@
+00-09 Admin:
+  - 00 Index
+  - 01 Contracts
+  - 02 Insurance
+10-19 Missions:
+  - 10 Active Missions
+  - 11 Completed Missions
+  - 12 Mission Briefings
+20-29 Villains:
+  - 20 Known Villains
+  - 21 Threat Assessments
+  - 22 Incident Reports
+30-39 Gear:
+  - 30 Suits
+  - 31 Gadgets
+  - 32 Vehicles
+40-49 Training:
+  - 40 Combat Logs
+  - 41 Fitness Programs
+  - 42 Skill Development
+50-59 Allies:
+  - 50 Team Roster
+  - 51 Sidekicks
+  - 52 Informants
+60-69 Locations:
+  - 60 Safehouses
+  - 61 Patrol Routes
+  - 62 Hotspots
+70-79 Intelligence:
+  - 70 Surveillance
+  - 71 Case Files
+  - 72 Evidence
+80-89 Public Relations:
+  - 80 Press Coverage
+  - 81 Secret Identity
+  - 82 Community Outreach
+90-99 Archive:
+  - 90 Retired Cases
+  - 91 Legacy Files

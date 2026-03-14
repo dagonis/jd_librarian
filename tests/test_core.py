@@ -565,3 +565,290 @@ class TestLintCLI:
         )
         assert result.returncode == 0
         assert "duplicate_category" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Scaffold tests
+# ---------------------------------------------------------------------------
+
+_ALL_AREA_LABELS = [
+    "00-09", "10-19", "20-29", "30-39", "40-49",
+    "50-59", "60-69", "70-79", "80-89", "90-99",
+]
+
+
+class TestScaffoldBlank:
+    def test_creates_ten_unused_areas(self, tmp_path: Path):
+        target = tmp_path / "my_jd"
+        created = JohnDecimal.scaffold(str(target), mode="blank")
+        dirs = sorted(p.name for p in target.iterdir())
+        assert len(dirs) == 10
+        assert all("Unused" in d for d in dirs)
+
+    def test_area_labels_are_correct(self, tmp_path: Path):
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="blank")
+        dirs = sorted(p.name for p in target.iterdir())
+        for label, dirname in zip(_ALL_AREA_LABELS, dirs):
+            assert dirname.startswith(label)
+
+    def test_no_categories_created(self, tmp_path: Path):
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="blank")
+        for area_dir in target.iterdir():
+            assert list(area_dir.iterdir()) == []
+
+    def test_returns_created_paths(self, tmp_path: Path):
+        target = tmp_path / "my_jd"
+        created = JohnDecimal.scaffold(str(target), mode="blank")
+        assert len(created) == 10
+        assert all(Path(p).exists() for p in created)
+
+    def test_resulting_library_is_valid(self, tmp_path: Path):
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="blank")
+        jd = JohnDecimal(str(target))
+        assert len(jd.areas) == 10
+        assert len(jd.categories) == 0
+
+
+class TestScaffoldOpinionated:
+    def test_creates_ten_areas(self, tmp_path: Path):
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="opinionated")
+        dirs = sorted(p.name for p in target.iterdir())
+        assert len(dirs) == 10
+
+    def test_admin_and_testing_named(self, tmp_path: Path):
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="opinionated")
+        names = {p.name for p in target.iterdir()}
+        assert "00-09 Admin" in names
+        assert "90-99 Testing" in names
+
+    def test_remaining_areas_unused(self, tmp_path: Path):
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="opinionated")
+        for p in target.iterdir():
+            if not p.name.startswith("00-09") and not p.name.startswith("90-99"):
+                assert "Unused" in p.name
+
+    def test_resulting_library_is_valid(self, tmp_path: Path):
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="opinionated")
+        jd = JohnDecimal(str(target))
+        assert len(jd.areas) == 10
+
+
+class TestScaffoldTemplate:
+    TEMPLATE = (
+        "00-09 Admin\n"
+        "  00 Index\n"
+        "  01 Homepage\n"
+        "10-19 Projects\n"
+        "  10 Active\n"
+        "20-29 People\n"
+    )
+
+    def _write_template(self, tmp_path: Path) -> Path:
+        tpl = tmp_path / "template.txt"
+        tpl.write_text(self.TEMPLATE)
+        return tpl
+
+    def test_creates_areas_from_template(self, tmp_path: Path):
+        tpl = self._write_template(tmp_path)
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+        names = {p.name for p in target.iterdir()}
+        assert "00-09 Admin" in names
+        assert "10-19 Projects" in names
+        assert "20-29 People" in names
+
+    def test_fills_missing_areas_as_unused(self, tmp_path: Path):
+        tpl = self._write_template(tmp_path)
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+        dirs = sorted(p.name for p in target.iterdir())
+        assert len(dirs) == 10
+        assert "30-39 Unused" in {p.name for p in target.iterdir()}
+
+    def test_creates_categories(self, tmp_path: Path):
+        tpl = self._write_template(tmp_path)
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+        admin = target / "00-09 Admin"
+        cats = sorted(p.name for p in admin.iterdir())
+        assert cats == ["00 Index", "01 Homepage"]
+
+    def test_returns_area_and_category_paths(self, tmp_path: Path):
+        tpl = self._write_template(tmp_path)
+        target = tmp_path / "my_jd"
+        created = JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+        # 10 areas + 3 categories (00 Index, 01 Homepage, 10 Active)
+        assert len(created) == 13
+        assert all(Path(p).exists() for p in created)
+
+    def test_resulting_library_is_valid(self, tmp_path: Path):
+        tpl = self._write_template(tmp_path)
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+        jd = JohnDecimal(str(target))
+        assert len(jd.areas) == 10
+        assert len(jd.categories) == 3
+
+    def test_template_mode_requires_path(self, tmp_path: Path):
+        target = tmp_path / "my_jd"
+        with pytest.raises(ValueError, match="template mode requires"):
+            JohnDecimal.scaffold(str(target), mode="template")
+
+    def test_empty_lines_ignored(self, tmp_path: Path):
+        tpl = tmp_path / "template.txt"
+        tpl.write_text("00-09 Admin\n\n  00 Index\n\n10-19 Projects\n")
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+        jd = JohnDecimal(str(target))
+        assert len(jd.categories) == 1  # Just "00 Index"
+
+
+class TestScaffoldDryRun:
+    def test_dry_run_returns_paths_but_creates_nothing(self, tmp_path: Path):
+        target = tmp_path / "my_jd"
+        created = JohnDecimal.scaffold(str(target), mode="blank", dry_run=True)
+        assert len(created) == 10
+        assert not target.exists()
+
+    def test_dry_run_template_returns_categories(self, tmp_path: Path):
+        tpl = tmp_path / "template.txt"
+        tpl.write_text("00-09 Admin\n  00 Index\n")
+        target = tmp_path / "my_jd"
+        created = JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl), dry_run=True)
+        assert len(created) == 11  # 10 areas + 1 category
+        assert not target.exists()
+
+
+class TestScaffoldCLI:
+    def test_cli_scaffold_blank(self, tmp_path: Path):
+        import subprocess
+        target = tmp_path / "my_jd"
+        result = subprocess.run(
+            ["jd", "scaffold", str(target)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert "Created:" in result.stdout
+        assert target.exists()
+        assert len(list(target.iterdir())) == 10
+
+    def test_cli_scaffold_opinionated(self, tmp_path: Path):
+        import subprocess
+        target = tmp_path / "my_jd"
+        result = subprocess.run(
+            ["jd", "scaffold", str(target), "--mode", "opinionated"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert "Admin" in result.stdout
+
+    def test_cli_scaffold_template(self, tmp_path: Path):
+        import subprocess
+        tpl = tmp_path / "template.txt"
+        tpl.write_text("00-09 Admin\n  00 Index\n")
+        target = tmp_path / "my_jd"
+        result = subprocess.run(
+            ["jd", "scaffold", str(target), "--mode", "template", "--template", str(tpl)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert (target / "00-09 Admin" / "00 Index").exists()
+
+    def test_cli_scaffold_dry_run(self, tmp_path: Path):
+        import subprocess
+        target = tmp_path / "my_jd"
+        result = subprocess.run(
+            ["jd", "--dry_run", "scaffold", str(target)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert "Would create:" in result.stdout
+        assert not target.exists()
+
+
+class TestScaffoldYAMLTemplate:
+    YAML_TEMPLATE = (
+        "00-09 Admin:\n"
+        "  - 00 Index\n"
+        "  - 01 Homepage\n"
+        "10-19 Projects:\n"
+        "  - 10 Active\n"
+        "20-29 People:\n"
+    )
+
+    def _write_template(self, tmp_path: Path, ext: str = ".yaml") -> Path:
+        tpl = tmp_path / f"template{ext}"
+        tpl.write_text(self.YAML_TEMPLATE)
+        return tpl
+
+    def test_creates_areas_from_yaml(self, tmp_path: Path):
+        tpl = self._write_template(tmp_path)
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+        names = {p.name for p in target.iterdir()}
+        assert "00-09 Admin" in names
+        assert "10-19 Projects" in names
+        assert "20-29 People" in names
+
+    def test_creates_categories_from_yaml(self, tmp_path: Path):
+        tpl = self._write_template(tmp_path)
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+        admin = target / "00-09 Admin"
+        cats = sorted(p.name for p in admin.iterdir())
+        assert cats == ["00 Index", "01 Homepage"]
+
+    def test_fills_missing_areas_as_unused(self, tmp_path: Path):
+        tpl = self._write_template(tmp_path)
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+        dirs = sorted(p.name for p in target.iterdir())
+        assert len(dirs) == 10
+        assert "30-39 Unused" in {p.name for p in target.iterdir()}
+
+    def test_yml_extension_works(self, tmp_path: Path):
+        tpl = self._write_template(tmp_path, ext=".yml")
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+        assert (target / "00-09 Admin" / "00 Index").exists()
+
+    def test_area_with_no_categories(self, tmp_path: Path):
+        tpl = tmp_path / "template.yaml"
+        tpl.write_text("00-09 Admin:\n20-29 People:\n")
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+        assert (target / "00-09 Admin").exists()
+        assert list((target / "00-09 Admin").iterdir()) == []
+
+    def test_resulting_library_is_valid(self, tmp_path: Path):
+        tpl = self._write_template(tmp_path)
+        target = tmp_path / "my_jd"
+        JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+        jd = JohnDecimal(str(target))
+        assert len(jd.areas) == 10
+        assert len(jd.categories) == 3
+
+    def test_invalid_yaml_raises(self, tmp_path: Path):
+        tpl = tmp_path / "bad.yaml"
+        tpl.write_text("- just a list\n- not a mapping\n")
+        target = tmp_path / "my_jd"
+        with pytest.raises(ValueError, match="must be a mapping"):
+            JohnDecimal.scaffold(str(target), mode="template", template_path=str(tpl))
+
+    def test_cli_scaffold_yaml_template(self, tmp_path: Path):
+        import subprocess
+        tpl = self._write_template(tmp_path)
+        target = tmp_path / "my_jd"
+        result = subprocess.run(
+            ["jd", "scaffold", str(target), "--mode", "template", "--template", str(tpl)],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert (target / "00-09 Admin" / "00 Index").exists()
