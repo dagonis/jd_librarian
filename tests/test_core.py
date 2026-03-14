@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 
-from jd.core import JohnDecimal, Area, Category, Identifier, JohnnyDecimalFile
+from jd.core import JohnDecimal, Area, Category, Identifier, JohnnyDecimalFile, LintWarning
 
 
 # ---------------------------------------------------------------------------
@@ -319,3 +319,249 @@ class TestCLI:
         )
         assert result.returncode == 0
         assert "Would have created" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Tests: lint
+# ---------------------------------------------------------------------------
+
+class TestLint:
+    def test_clean_library_has_no_high_severity_warnings(self, jd: JohnDecimal):
+        warnings = jd.lint()
+        high_severity = [w for w in warnings if w.rule in ("duplicate_category", "duplicate_id", "category_out_of_range", "bad_naming")]
+        assert high_severity == []
+
+    def test_duplicate_category_number(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "11 Vendors").mkdir()
+        (area / "11 Also Vendors").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "duplicate_category" in rules
+
+    def test_duplicate_identifier_number(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        (cat / "01 Acme").mkdir()
+        (cat / "01 Also Acme").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "duplicate_id" in rules
+
+    def test_category_out_of_range(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "25 Wrong Place").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "category_out_of_range" in rules
+
+    def test_bad_area_naming(self, tmp_path: Path):
+        (tmp_path / "Management").mkdir()
+        warnings = JohnDecimal.lint_from_path(str(tmp_path))
+        rules = [w.rule for w in warnings]
+        assert "bad_naming" in rules
+
+    def test_bad_category_naming(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "Vendors").mkdir()
+        warnings = JohnDecimal.lint_from_path(str(tmp_path))
+        rules = [w.rule for w in warnings]
+        assert "bad_naming" in rules
+
+    def test_bad_identifier_naming(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        (cat / "Acme Corp").mkdir()
+        warnings = JohnDecimal.lint_from_path(str(tmp_path))
+        rules = [w.rule for w in warnings]
+        assert "bad_naming" in rules
+
+    def test_lint_warning_str(self):
+        w = LintWarning("duplicate_id", "test message", Path("/tmp"))
+        assert str(w) == "[duplicate_id] test message"
+
+    def test_multiple_issues(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "11 Vendors").mkdir()
+        (area / "11 Also Vendors").mkdir()
+        (area / "25 Out of Range").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = {w.rule for w in warnings}
+        assert "duplicate_category" in rules
+        assert "category_out_of_range" in rules
+
+    def test_empty_category(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "11 Vendors").mkdir()  # no identifiers inside
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "empty_category" in rules
+
+    def test_empty_category_not_flagged_when_has_ids(self, jd: JohnDecimal):
+        warnings = jd.lint()
+        # The fixture's "12 Intelligence" is empty, so it should be flagged
+        empty_cats = [w for w in warnings if w.rule == "empty_category"]
+        cat_names = [w.message for w in empty_cats]
+        assert any("Intelligence" in m for m in cat_names)
+        # But "11 Vendors" should NOT be flagged
+        assert not any("Vendors" in m for m in cat_names)
+
+    def test_empty_identifier(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        (cat / "01 Acme").mkdir()  # no files inside
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "empty_identifier" in rules
+
+    def test_empty_identifier_not_flagged_when_has_files(self, jd: JohnDecimal):
+        warnings = jd.lint()
+        empty_ids = [w for w in warnings if w.rule == "empty_identifier"]
+        # Acme Corp has files, so it should NOT be flagged
+        assert not any("Acme Corp" in w.message for w in empty_ids)
+
+    def test_id_gaps(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        (cat / "01 Acme").mkdir()
+        (cat / "03 Globex").mkdir()  # gap at 02
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        gap_warnings = [w for w in warnings if w.rule == "id_gap"]
+        assert len(gap_warnings) == 1
+        assert "02" in gap_warnings[0].message
+
+    def test_no_id_gaps_when_contiguous(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        (cat / "01 Acme").mkdir()
+        (cat / "02 Globex").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        gap_warnings = [w for w in warnings if w.rule == "id_gap"]
+        assert len(gap_warnings) == 0
+
+    def test_category_capacity_warning(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        # Create 80 identifiers to hit the threshold
+        for i in range(1, 81):
+            (cat / f"{str(i).zfill(2)} Vendor{i}").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "category_capacity" in rules
+
+    def test_category_capacity_no_warning_below_threshold(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        for i in range(1, 5):
+            (cat / f"{str(i).zfill(2)} Vendor{i}").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        cap_warnings = [w for w in warnings if w.rule == "category_capacity"]
+        assert len(cap_warnings) == 0
+
+    def test_area_capacity_warning(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        # Create 8 categories to hit the threshold
+        for i in range(10, 18):
+            (area / f"{i} Category{i}").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        rules = [w.rule for w in warnings]
+        assert "area_capacity" in rules
+
+    def test_area_capacity_no_warning_below_threshold(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "11 Vendors").mkdir()
+        (area / "12 Intel").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        cap_warnings = [w for w in warnings if w.rule == "area_capacity"]
+        assert len(cap_warnings) == 0
+
+    def test_orphan_file_at_root(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (tmp_path / "stray_file.txt").touch()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        orphan_warnings = [w for w in warnings if w.rule == "orphan_file"]
+        assert any("stray_file.txt" in w.message for w in orphan_warnings)
+
+    def test_orphan_file_in_area(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "notes.txt").touch()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        orphan_warnings = [w for w in warnings if w.rule == "orphan_file"]
+        assert any("notes.txt" in w.message for w in orphan_warnings)
+
+    def test_orphan_file_in_category(self, tmp_path: Path):
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        cat = area / "11 Vendors"
+        cat.mkdir()
+        (cat / "README.md").touch()
+        jd = JohnDecimal(str(tmp_path))
+        warnings = jd.lint()
+        orphan_warnings = [w for w in warnings if w.rule == "orphan_file"]
+        assert any("README.md" in w.message for w in orphan_warnings)
+        assert "should be inside an identifier" in orphan_warnings[0].message
+
+    def test_no_orphan_files_in_clean_library(self, jd: JohnDecimal):
+        warnings = jd.lint()
+        orphan_warnings = [w for w in warnings if w.rule == "orphan_file"]
+        assert len(orphan_warnings) == 0
+
+
+class TestLintCLI:
+    def test_cli_lint_runs(self, jd_root: Path):
+        import subprocess
+        result = subprocess.run(
+            ["jd", "--jd_root", str(jd_root), "lint"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+
+    def test_cli_lint_with_issues(self, tmp_path: Path):
+        import subprocess
+        area = tmp_path / "10-19 Management"
+        area.mkdir()
+        (area / "11 Vendors").mkdir()
+        (area / "11 Also Vendors").mkdir()
+        result = subprocess.run(
+            ["jd", "--jd_root", str(tmp_path), "lint"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0
+        assert "duplicate_category" in result.stdout
