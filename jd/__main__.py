@@ -31,6 +31,12 @@ def main() -> None:
     add_identifier_parser.add_argument("--add_placeholder", "-p", help="Add a placeholder file for the new identifier. This is useful if you are using tools like Obsidian where you may want to link to this ID.", action="store_true")
     # Subparser for linting the JD library
     subparsers.add_parser("lint", help="Check the Johnny Decimal library for structural problems")
+    # Subparser for scaffolding a new JD library
+    scaffold_parser = subparsers.add_parser("scaffold", help="Create a new Johnny Decimal library from scratch")
+    scaffold_parser.add_argument("target", help="Directory to create the new JD library in")
+    scaffold_parser.add_argument("--mode", choices=["blank", "opinionated", "template"], default="blank",
+                                 help="Scaffold mode: blank (default), opinionated, or template")
+    scaffold_parser.add_argument("--template", dest="template_path", help="Path to template file (required for template mode)")
     # On to the rest of the script
     args = parser.parse_args()
     if args.command == "lint":
@@ -40,6 +46,11 @@ def main() -> None:
                 print(w)
         else:
             print("No issues found!")
+        return
+    if args.command == "scaffold":
+        created = JohnDecimal.scaffold(args.target, args.mode, args.template_path, args.dry_run)
+        for path in created:
+            print(f"{'Would create' if args.dry_run else 'Created'}: {path}")
         return
     jd = JohnDecimal(args.jd_root)
     if hasattr(args, 'search_term'):
