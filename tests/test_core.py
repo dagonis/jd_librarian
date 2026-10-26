@@ -1,3 +1,4 @@
+import sys
 import pytest
 from pathlib import Path
 
@@ -269,7 +270,7 @@ class TestCLI:
     def test_cli_tree(self, jd_root: Path):
         import subprocess
         result = subprocess.run(
-            ["jd", "--jd_root", str(jd_root)],
+            [sys.executable, "-m", "jd", "--jd_root", str(jd_root)],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -278,7 +279,7 @@ class TestCLI:
     def test_cli_search(self, jd_root: Path):
         import subprocess
         result = subprocess.run(
-            ["jd", "--jd_root", str(jd_root), "search", "acme"],
+            [sys.executable, "-m", "jd", "--jd_root", str(jd_root), "search", "acme"],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -287,7 +288,7 @@ class TestCLI:
     def test_cli_show_category(self, jd_root: Path):
         import subprocess
         result = subprocess.run(
-            ["jd", "--jd_root", str(jd_root), "show", "11"],
+            [sys.executable, "-m", "jd", "--jd_root", str(jd_root), "show", "11"],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -296,7 +297,7 @@ class TestCLI:
     def test_cli_show_identifier(self, jd_root: Path):
         import subprocess
         result = subprocess.run(
-            ["jd", "--jd_root", str(jd_root), "show", "11.01"],
+            [sys.executable, "-m", "jd", "--jd_root", str(jd_root), "show", "11.01"],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -305,7 +306,7 @@ class TestCLI:
     def test_cli_add_id(self, jd_root: Path):
         import subprocess
         result = subprocess.run(
-            ["jd", "--jd_root", str(jd_root), "add_id", "20", "New Project"],
+            [sys.executable, "-m", "jd", "--jd_root", str(jd_root), "add_id", "20", "New Project"],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -314,7 +315,7 @@ class TestCLI:
     def test_cli_add_id_dry_run(self, jd_root: Path):
         import subprocess
         result = subprocess.run(
-            ["jd", "--jd_root", str(jd_root), "--dry_run", "add_id", "20", "Dry"],
+            [sys.executable, "-m", "jd", "--jd_root", str(jd_root), "--dry_run", "add_id", "20", "Dry"],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -548,7 +549,7 @@ class TestLintCLI:
     def test_cli_lint_runs(self, jd_root: Path):
         import subprocess
         result = subprocess.run(
-            ["jd", "--jd_root", str(jd_root), "lint"],
+            [sys.executable, "-m", "jd", "--jd_root", str(jd_root), "lint"],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -560,7 +561,7 @@ class TestLintCLI:
         (area / "11 Vendors").mkdir()
         (area / "11 Also Vendors").mkdir()
         result = subprocess.run(
-            ["jd", "--jd_root", str(tmp_path), "lint"],
+            [sys.executable, "-m", "jd", "--jd_root", str(tmp_path), "lint"],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -731,7 +732,7 @@ class TestScaffoldCLI:
         import subprocess
         target = tmp_path / "my_jd"
         result = subprocess.run(
-            ["jd", "scaffold", str(target)],
+            [sys.executable, "-m", "jd", "scaffold", str(target)],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -743,7 +744,7 @@ class TestScaffoldCLI:
         import subprocess
         target = tmp_path / "my_jd"
         result = subprocess.run(
-            ["jd", "scaffold", str(target), "--mode", "opinionated"],
+            [sys.executable, "-m", "jd", "scaffold", str(target), "--mode", "opinionated"],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -755,7 +756,7 @@ class TestScaffoldCLI:
         tpl.write_text("00-09 Admin\n  00 Index\n")
         target = tmp_path / "my_jd"
         result = subprocess.run(
-            ["jd", "scaffold", str(target), "--mode", "template", "--template", str(tpl)],
+            [sys.executable, "-m", "jd", "scaffold", str(target), "--mode", "template", "--template", str(tpl)],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -765,7 +766,7 @@ class TestScaffoldCLI:
         import subprocess
         target = tmp_path / "my_jd"
         result = subprocess.run(
-            ["jd", "--dry_run", "scaffold", str(target)],
+            [sys.executable, "-m", "jd", "--dry_run", "scaffold", str(target)],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -847,7 +848,7 @@ class TestScaffoldYAMLTemplate:
         tpl = self._write_template(tmp_path)
         target = tmp_path / "my_jd"
         result = subprocess.run(
-            ["jd", "scaffold", str(target), "--mode", "template", "--template", str(tpl)],
+            [sys.executable, "-m", "jd", "scaffold", str(target), "--mode", "template", "--template", str(tpl)],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -920,7 +921,7 @@ class TestStatsCLI:
     def test_cli_stats(self, jd_root: Path):
         import subprocess
         result = subprocess.run(
-            ["jd", "--jd_root", str(jd_root), "stats"],
+            [sys.executable, "-m", "jd", "--jd_root", str(jd_root), "stats"],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
@@ -991,9 +992,112 @@ class TestReportCLI:
         import subprocess
         out = tmp_path / "report.html"
         result = subprocess.run(
-            ["jd", "--jd_root", str(jd_root), "report", "-o", str(out)],
+            [sys.executable, "-m", "jd", "--jd_root", str(jd_root), "report", "-o", str(out)],
             capture_output=True, text=True,
         )
         assert result.returncode == 0
         assert out.exists()
         assert "Report written to" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Regression tests
+# ---------------------------------------------------------------------------
+
+def _run_cli(*args: str, env: dict | None = None):
+    import os
+    import subprocess
+    return subprocess.run(
+        [sys.executable, "-m", "jd", *args],
+        capture_output=True, text=True, env={**os.environ, **(env or {})},
+    )
+
+
+class TestRegressions:
+    def test_jd_root_expands_tilde(self, jd_root: Path, monkeypatch):
+        monkeypatch.setenv("HOME", str(jd_root.parent))
+        jd = JohnDecimal("~/" + jd_root.name)
+        assert len(jd.areas) == 2
+
+    def test_cli_jd_root_tilde(self, jd_root: Path):
+        result = _run_cli("--jd_root", "~/" + jd_root.name, "stats", env={"HOME": str(jd_root.parent)})
+        assert result.returncode == 0, result.stderr
+        assert "JD Library Stats" in result.stdout
+
+    def test_show_identifier_requires_exact_match(self, jd: JohnDecimal):
+        assert "No identifier found" in jd.get_johnny_decimal_identifier("1.01")
+        assert "No identifier found" in jd.get_johnny_decimal_identifier("11.0")
+
+    def test_add_category_partial_area_id_rejected(self, jd: JohnDecimal, jd_root: Path):
+        assert jd.add_johnny_decimal_category("1", "Wrong") is False
+        assert not (jd_root / "10-19 Management" / "01 Wrong").exists()
+
+    def test_add_category_accepts_full_range(self, jd: JohnDecimal, jd_root: Path):
+        assert jd.add_johnny_decimal_category("10-19", "Ranged") is True
+        assert (jd_root / "10-19 Management" / "10 Ranged").is_dir()
+
+    def test_add_category_full_area(self, tmp_path: Path, capsys):
+        area = tmp_path / "10-19 Full"
+        area.mkdir()
+        for i in range(10, 20):
+            (area / f"{i} Cat").mkdir()
+        jd = JohnDecimal(str(tmp_path))
+        assert jd.add_johnny_decimal_category("10", "Overflow") is False
+        assert "is full" in capsys.readouterr().err
+
+    def test_add_identifier_missing_category_reports_error(self, jd: JohnDecimal, capsys):
+        assert jd.add_johnny_decimal_identifier("77", "Nope") is False
+        assert "no category found" in capsys.readouterr().err
+
+    def test_cli_add_id_missing_category_exits_nonzero(self, jd_root: Path):
+        result = _run_cli("--jd_root", str(jd_root), "add_id", "77", "Nope")
+        assert result.returncode == 1
+
+    def test_cli_dry_run_after_subcommand(self, jd_root: Path):
+        result = _run_cli("--jd_root", str(jd_root), "add_id", "20", "Dry", "--dry_run")
+        assert result.returncode == 0, result.stderr
+        assert "Would have created" in result.stdout
+        assert not (jd_root / "20-29 Projects" / "20 Cloud" / "02 Dry").exists()
+
+    def test_cli_tree_with_files(self, jd_root: Path):
+        result = _run_cli("--jd_root", str(jd_root), "--files")
+        assert "contract.pdf" in result.stdout
+
+    def test_non_conforming_folders_are_skipped(self, jd_root: Path):
+        (jd_root / "Inbox").mkdir()
+        (jd_root / "10-19 Management" / "Scratch").mkdir()
+        (jd_root / "10-19 Management" / "11 Vendors" / "misc").mkdir()
+        jd = JohnDecimal(str(jd_root))
+        assert len(jd.areas) == 2
+        assert len(jd.categories) == 3
+        assert len(jd.identifiers) == 3
+
+    def test_lint_reports_bad_naming_and_other_issues_together(self, jd_root: Path):
+        (jd_root / "Inbox").mkdir()
+        rules = {w.rule for w in JohnDecimal.lint_from_path(str(jd_root))}
+        assert "bad_naming" in rules
+        assert "empty_category" in rules
+
+
+class TestPath:
+    def test_path_identifier(self, jd: JohnDecimal, jd_root: Path):
+        assert jd.get_johnny_decimal_path("11.01") == jd_root / "10-19 Management" / "11 Vendors" / "01 Acme Corp"
+
+    def test_path_category(self, jd: JohnDecimal, jd_root: Path):
+        assert jd.get_johnny_decimal_path("11") == jd_root / "10-19 Management" / "11 Vendors"
+
+    def test_path_not_found(self, jd: JohnDecimal):
+        assert jd.get_johnny_decimal_path("99.99") is None
+        assert jd.get_johnny_decimal_path("99") is None
+        assert jd.get_johnny_decimal_path("1.01") is None
+
+    def test_cli_path(self, jd_root: Path):
+        result = _run_cli("--jd_root", str(jd_root), "path", "11.01")
+        assert result.returncode == 0, result.stderr
+        assert Path(result.stdout.strip()) == jd_root / "10-19 Management" / "11 Vendors" / "01 Acme Corp"
+
+    def test_cli_path_not_found(self, jd_root: Path):
+        result = _run_cli("--jd_root", str(jd_root), "path", "99.99")
+        assert result.returncode == 1
+        assert result.stdout == ""
+        assert "nothing found" in result.stderr

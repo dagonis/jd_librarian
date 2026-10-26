@@ -8,6 +8,7 @@ The Johnny Decimal system organizes information using a simple numerical hierarc
 
 - **Search** — find categories, identifiers, and files by keyword
 - **Show** — display a specific category or identifier and its contents
+- **Path** — print the folder path for a category or identifier (`cd "$(jd path 11.01)"`)
 - **Add** — create new categories and identifiers with automatic numbering
 - **Lint** — check your library for structural problems (10 rules covering naming, duplicates, capacity, orphan files, and more)
 - **Scaffold** — create a new JD library from scratch (blank, opinionated, or from a template file)
@@ -50,11 +51,24 @@ jd show 11          # show category 11 and its identifiers
 jd show 11.01       # show identifier 11.01 and its files
 ```
 
+### Path
+
+Print the folder for a category or identifier — handy for `cd`, `open`, or piping into other tools:
+
+```bash
+jd path 11.01               # /Users/you/jd/10-19 Management/11 Vendors/01 Acme Corp
+cd "$(jd path 11.01)"
+open "$(jd path 11)"        # macOS: open the category in Finder
+```
+
+Exits non-zero (with an error on stderr) if the ID doesn't exist.
+
 ### Add Category
 
 ```bash
 jd add_category 10 "New Category"
 jd --dry_run add_category 10 "New Category"
+jd add_category 10 "New Category" --dry_run   # --dry_run works after the subcommand too
 ```
 
 ### Add Identifier
@@ -69,11 +83,12 @@ jd add_id 11 "New Vendor" --add_placeholder    # creates a .md file inside
 ```bash
 jd                  # print the full tree
 jd -s               # include stats summary
+jd --files          # include files under each identifier
 ```
 
 ### Lint
 
-Check your library for structural issues:
+Check your library for structural issues. Folders that don't follow the naming scheme are skipped by every other command and reported here as `bad_naming`, alongside any other findings:
 
 ```bash
 jd lint
@@ -161,7 +176,7 @@ The report includes stats cards, per-area/category capacity bars, the full lint 
 
 ## Development
 
-Run the test suite (112 tests):
+Run the test suite:
 
 ```bash
 pip install -e ".[dev]"

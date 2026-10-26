@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .models import Category, Identifier, LintWarning, _visible_dirs, _visible_files
+from .models import (
+    AREA_PATTERN, CATEGORY_PATTERN, IDENTIFIER_PATTERN,
+    Category, Identifier, LintWarning, _visible_dirs, _visible_files,
+)
 
 if TYPE_CHECKING:
     from .core import JohnDecimal
@@ -28,29 +30,23 @@ def lint(jd: JohnDecimal) -> list[LintWarning]:
 
 
 def lint_from_path(path: str) -> list[LintWarning]:
-    """Run all lint checks, starting with bad naming (which can prevent normal init)."""
+    """Run all lint checks, including bad naming (which needs a raw directory walk)."""
     from .core import JohnDecimal
 
     warnings: list[LintWarning] = []
-    root = Path(path)
-    area_pattern = re.compile(r"^\d{2}-\d{2} .+$")
-    category_pattern = re.compile(r"^\d{2} .+$")
-    identifier_pattern = re.compile(r"^\d{2} .+$")
+    root = Path(path).expanduser()
 
     for d in _visible_dirs(root):
-        if not area_pattern.match(d.name):
+        if not AREA_PATTERN.match(d.name):
             warnings.append(LintWarning("bad_naming", f"Area folder doesn't match 'NN-NN Name' format: {d.name}", d))
         else:
             for cd in _visible_dirs(d):
-                if not category_pattern.match(cd.name):
+                if not CATEGORY_PATTERN.match(cd.name):
                     warnings.append(LintWarning("bad_naming", f"Category folder doesn't match 'NN Name' format: {cd.name}", cd))
                 else:
                     for idd in _visible_dirs(cd):
-                        if not identifier_pattern.match(idd.name):
+                        if not IDENTIFIER_PATTERN.match(idd.name):
                             warnings.append(LintWarning("bad_naming", f"Identifier folder doesn't match 'NN Name' format: {idd.name}", idd))
-
-    if warnings:
-        return warnings
 
     jd = JohnDecimal(path)
     warnings.extend(lint(jd))
@@ -74,17 +70,8 @@ def _lint_duplicate_categories(jd: JohnDecimal, warnings: list[LintWarning]) -> 
 
 def _lint_category_out_of_range(jd: JohnDecimal, warnings: list[LintWarning]) -> None:
     for area in jd.areas:
-        try:
-            start, end = area.area_number_range.split("-")
-            range_start, range_end = int(start), int(end)
-        except ValueError:
-            continue
         for category in area.categories:
-            try:
-                cat_num = int(category.category_number)
-            except ValueError:
-                continue
-            if not (range_start <= cat_num <= range_end):
+            if not (area.area_start <= int(category.category_number) <= area.area_end):
                 warnings.append(LintWarning(
                     "category_out_of_range",
                     f"Category {category.category_number} ({category.category_short_name}) "

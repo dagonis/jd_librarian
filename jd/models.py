@@ -1,10 +1,25 @@
+import re
 from dataclasses import dataclass
 from pathlib import Path
+
+
+AREA_PATTERN = re.compile(r"^\d{2}-\d{2} .+$")
+CATEGORY_PATTERN = re.compile(r"^\d{2} .+$")
+IDENTIFIER_PATTERN = re.compile(r"^\d{2} .+$")
 
 
 def _visible_dirs(path: Path) -> list[Path]:
     """Return sorted visible (non-hidden) subdirectories of path."""
     return sorted(p for p in path.iterdir() if p.is_dir() and not p.name.startswith("."))
+
+
+def _jd_dirs(path: Path, pattern: re.Pattern[str]) -> list[Path]:
+    """Return visible subdirectories whose names match a JD naming pattern.
+
+    Non-matching folders are skipped rather than crashing the whole load;
+    lint reports them as bad_naming.
+    """
+    return [p for p in _visible_dirs(path) if pattern.match(p.name)]
 
 
 def _visible_files(path: Path) -> list[Path]:
@@ -33,8 +48,9 @@ class Area:
     def __post_init__(self) -> None:
         self.area_name = self.file_system_location.name
         self.area_number_range, self.area_short_name = self.area_name.split(" ", maxsplit=1)
+        self.area_start, self.area_end = (int(n) for n in self.area_number_range.split("-"))
         self.categories = sorted(
-            [Category(p, self.area_name) for p in _visible_dirs(self.file_system_location)],
+            [Category(p, self.area_name) for p in _jd_dirs(self.file_system_location, CATEGORY_PATTERN)],
             key=lambda c: c.category_name,
         )
 
@@ -55,7 +71,7 @@ class Category:
         self.category_name = self.file_system_location.name
         self.category_number, self.category_short_name = self.category_name.split(" ", maxsplit=1)
         self.identifiers = sorted(
-            [Identifier(p, self.area, self.category_number) for p in _visible_dirs(self.file_system_location)],
+            [Identifier(p, self.area, self.category_number) for p in _jd_dirs(self.file_system_location, IDENTIFIER_PATTERN)],
             key=lambda i: i.full_name,
         )
 

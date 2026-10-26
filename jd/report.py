@@ -82,14 +82,7 @@ def _html_bar(pct: float) -> str:
 
 
 def _row(name: str, pct: float, detail: str) -> str:
-    clamped = min(pct, 100)
-    color = "#0ff" if clamped < 60 else "#ff0" if clamped < 85 else "#f0a"
-    return (
-        f'<tr><td class="name">{_esc(name)}</td>'
-        f'<td><div class="bar"><div class="bar-fill" style="width:{clamped}%;background:{color}"></div>'
-        f'<span class="bar-label">{pct:.1f}%</span></div></td>'
-        f'<td class="detail">{_esc(detail)}</td></tr>\n'
-    )
+    return f'<tr><td class="name">{_esc(name)}</td><td>{_html_bar(pct)}</td><td class="detail">{_esc(detail)}</td></tr>\n'
 
 
 _TEMPLATE = """\

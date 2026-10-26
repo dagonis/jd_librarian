@@ -2,6 +2,27 @@
 
 All notable changes to JD Librarian will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Path** — `jd path 11.01` prints the folder path for a category or identifier, for use with `cd`, `open`, etc.
+- `--files` flag to include files in the tree view
+- `--dry_run` can now be passed after the subcommand (e.g. `jd add_id 11 Foo --dry_run`)
+- Python 3.14 in CI
+
+### Fixed
+- `python -m jd` crashed with `NameError` (`_validate_jd_root` was defined after `main()` ran)
+- `~` in `--jd_root` / `JD_ROOT` (including the `~/jd` default) wasn't expanded
+- `add_category 1 ...` matched area `10-19` by prefix and created an out-of-range `01` category
+- `show 1.01` substring-matched `11.01`; identifier lookup is now exact
+- `add_category` / `add_id` failed silently (exit 0, no output) for a missing or full area/category
+- Any non-conforming folder (e.g. `Inbox`) crashed tree, search, stats, and report; such folders are now skipped
+- `lint` stopped after `bad_naming` findings; it now reports all issues in one pass, and `report` includes naming issues
+
+### Changed
+- Version is defined once in `jd/__init__.py`
+- CLI tests run via `python -m jd` with the current interpreter rather than whatever `jd` is on `PATH`
+
 ## [1.0.0] - 2026-03-13
 
 ### Added

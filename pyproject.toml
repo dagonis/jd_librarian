@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jd-librarian"
-version = "1.0.0"
+dynamic = ["version"]
 description = "A command line tool for managing Johnny Decimal libraries"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,6 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Office/Business",
     "Typing :: Typed",
 ]
@@ -36,3 +37,6 @@ jd = "jd.__main__:main"
 
 [project.optional-dependencies]
 dev = ["pytest"]
+
+[tool.setuptools.dynamic]
+version = { attr = "jd.__version__" }
