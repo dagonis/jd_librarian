@@ -1,10 +1,11 @@
+import sys
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
 
 from .models import (
-    Area, Category, Identifier, JohnnyDecimalFile, LintWarning,
-    _visible_dirs,
+    AREA_PATTERN, Area, Category, Identifier, JohnnyDecimalFile, LintWarning,
+    _jd_dirs,
 )
 from . import lint as _lint
 from . import scaffold as _scaffold
@@ -22,8 +23,9 @@ class JohnDecimal:
     file_system_location: str
 
     def __post_init__(self) -> None:
-        root = Path(self.file_system_location)
-        self.areas = sorted([Area(p) for p in _visible_dirs(root)], key=lambda a: a.area_name)
+        root = Path(self.file_system_location).expanduser()
+        self.file_system_location = str(root)
+        self.areas = sorted([Area(p) for p in _jd_dirs(root, AREA_PATTERN)], key=lambda a: a.area_name)
         self.categories = list(chain.from_iterable(a.categories for a in self.areas))
         self.identifiers = list(chain.from_iterable(c.identifiers for c in self.categories))
         self.files = list(chain.from_iterable(i.files for i in self.identifiers))
@@ -75,12 +77,26 @@ class JohnDecimal:
         return f"No category found for {category_id}"
 
     def get_johnny_decimal_identifier(self, identifier_id: str) -> str:
+        category_id, _, id_number = identifier_id.partition(".")
         for identifier in self.identifiers:
-            if identifier_id in str(identifier):
+            if identifier.category == category_id and identifier.id_number == id_number:
                 lines = [str(identifier)]
                 lines.extend(f"    {jdfile.file_name}" for jdfile in identifier.files)
                 return "\n".join(lines)
         return f"No identifier found for {identifier_id}"
+
+    def get_johnny_decimal_path(self, jd_id: str) -> Path | None:
+        """Return the folder for a category ("11") or identifier ("11.01"), or None if not found."""
+        category_id, _, id_number = jd_id.partition(".")
+        if id_number:
+            for identifier in self.identifiers:
+                if identifier.category == category_id and identifier.id_number == id_number:
+                    return identifier.file_system_location
+        else:
+            for category in self.categories:
+                if category.category_number == category_id:
+                    return category.file_system_location
+        return None
 
     def __str__(self) -> str:
         return str(self.identifiers)
@@ -111,10 +127,12 @@ class JohnDecimal:
     # -- Create operations --
 
     def add_johnny_decimal_category(self, area_id: str, new_category_name: str, dry_run: bool = False) -> bool:
+        # Accept either the area's start number ("10") or its full range ("10-19")
+        start = area_id.split("-", maxsplit=1)[0]
         for area in self.areas:
-            if area.area_number_range.startswith(area_id):
+            if start.isdigit() and int(start) == area.area_start:
                 existing = {c.category_number for c in area.categories}
-                for i in range(int(area_id), int(area_id) + 10):
+                for i in range(area.area_start, area.area_end + 1):
                     number = str(i).zfill(2)
                     if number not in existing:
                         new_category_path = area.file_system_location / f"{number} {new_category_name}"
@@ -124,6 +142,9 @@ class JohnDecimal:
                             return True
                         print(f"Would have created - {new_category_path}")
                         return False
+                print(f"Error: area {area} is full ({len(area.categories)}/10 categories)", file=sys.stderr)
+                return False
+        print(f"Error: no area found for {area_id}", file=sys.stderr)
         return False
 
     def add_johnny_decimal_identifier(self, category_id: str, identifier_name: str, placeholder: bool = False, dry_run: bool = False) -> bool:
@@ -142,4 +163,7 @@ class JohnDecimal:
                             return True
                         print(f"Would have created - {new_path}")
                         return False
+                print(f"Error: category {category} is full (99/99 identifiers)", file=sys.stderr)
+                return False
+        print(f"Error: no category found for {category_id}", file=sys.stderr)
         return False
